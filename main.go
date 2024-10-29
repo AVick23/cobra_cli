@@ -26,12 +26,51 @@ func completer(d prompt.Document) []prompt.Suggest {
 		return prompt.FilterHasPrefix([]prompt.Suggest{
 			{Text: "create", Description: "Создать таблицу"},
 			{Text: "structure", Description: "Показать структуру таблицы"},
+			{Text: "newdb", Description: "Создать новую базу данных"},
 			{Text: "name", Description: "Узнать название бд с которой работаете в данный момент"},
 			{Text: "exit", Description: "Завершите работу программы"},
 		}, d.GetWordBeforeCursor(), true)
 	}
 
 	return nil
+}
+
+func createDatabase() {
+	dir := "databases"
+	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		fmt.Printf("Ошибка при создании директории: %v\n", err)
+		return
+	}
+
+	fmt.Print("Введите имя новой базы данных: ")
+	input := prompt.Input("> ", completer)
+	dbName := input
+
+	if !strings.HasSuffix(dbName, ".db") {
+		dbName += ".db"
+	}
+
+	dbPath := filepath.Join(dir, dbName)
+
+	if _, err := os.Stat(dbPath); err == nil {
+		fmt.Println("База данных с таким именем уже существует.")
+		return
+	}
+
+	newDB, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		fmt.Printf("Ошибка при создании базы данных: %v\n", err)
+		return
+	}
+	defer newDB.Close()
+
+	_, err = newDB.Exec("CREATE TABLE IF NOT EXISTS test_table (id INTEGER PRIMARY KEY);")
+	if err != nil {
+		fmt.Printf("Ошибка при инициализации базы данных: %v\n", err)
+		return
+	}
+
+	fmt.Printf("База данных '%s' успешно создана в директории '%s'.\n", dbName, dir)
 }
 
 func connectDB() {
@@ -61,7 +100,8 @@ func connectDB() {
 
 	var choice int
 	fmt.Print("Введите номер базы данных для подключения: ")
-	fmt.Scan(&choice)
+	input := prompt.Input("> ", completer)
+	fmt.Sscanf(input, "%d", &choice)
 
 	if choice < 1 || choice > len(dbFiles) {
 		fmt.Println("Некорректный выбор.")
@@ -144,7 +184,8 @@ func selectTable(tables []string) (string, error) {
 
 	var choice int
 	fmt.Print("Введите номер таблицы для отображения её структуры: ")
-	fmt.Scan(&choice)
+	input := prompt.Input("> ", completer)
+	fmt.Sscanf(input, "%d", &choice)
 
 	if choice < 1 || choice > len(tables) {
 		return "", fmt.Errorf("некорректный выбор")
@@ -202,6 +243,8 @@ func executor(in string) {
 		case "name":
 			name := getDBName()
 			fmt.Println(name)
+		case "newdb":
+			createDatabase()
 		case "structure":
 			tables, err := listTables()
 			if err != nil {
